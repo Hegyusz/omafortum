@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
 from .api import FortumAPIClient, OAuth2AuthClient
-from .const import DOMAIN
+from .const import DOMAIN, CONF_LOCALE
 from .exceptions import AuthenticationError, MittFortumError
 
 _LOGGER = logging.getLogger(__name__)
@@ -22,6 +22,7 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_USERNAME): str,
         vol.Required(CONF_PASSWORD): str,
+        vol.Required(CONF_LOCALE): vol.In(["SV", "FI"])
     }
 )
 
@@ -29,17 +30,19 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
 async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str, Any]:
     """Validate the user input allows us to connect."""
     try:
+        locale=data[CONF_LOCALE]
         # Test authentication
         auth_client = OAuth2AuthClient(
             hass=hass,
             username=data[CONF_USERNAME],
             password=data[CONF_PASSWORD],
+            locale=locale,
         )
 
         await auth_client.authenticate()
 
         # Test API connection
-        api_client = FortumAPIClient(hass, auth_client)
+        api_client = FortumAPIClient(hass, auth_client, locale)
         await api_client.get_customer_id()
 
         return {"title": f"MittFortum ({data[CONF_USERNAME]})"}

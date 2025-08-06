@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 from homeassistant.helpers.httpx_client import get_async_client
 
-from ..const import SESSION_URL
+from ..const import get_fortum_base_url, get_session_url
 from ..exceptions import APIError, InvalidResponseError, UnexpectedStatusCodeError
 from ..models import ConsumptionData, CustomerDetails, MeteringPoint, TimeSeries
 from .endpoints import APIEndpoints
@@ -28,10 +28,11 @@ TOKEN_EXPIRED_RETRY_MSG = "Token expired - retry required"
 class FortumAPIClient:
     """Main API client for Fortum tRPC services."""
 
-    def __init__(self, hass: HomeAssistant, auth_client: OAuth2AuthClient) -> None:
+    def __init__(self, hass: HomeAssistant, auth_client: OAuth2AuthClient, locale: str) -> None:
         """Initialize API client."""
         self._hass = hass
         self._auth_client = auth_client
+        self._locale = locale
 
     async def get_customer_id(self) -> str:
         """Extract customer ID from session data or ID token."""
@@ -62,7 +63,7 @@ class FortumAPIClient:
 
     async def get_customer_details(self) -> CustomerDetails:
         """Fetch customer details using session endpoint."""
-        response = await self._get(SESSION_URL)
+        response = await self._get(get_session_url(self._locale))
 
         try:
             json_data = response.json()
@@ -74,7 +75,7 @@ class FortumAPIClient:
 
     async def get_metering_points(self) -> list[MeteringPoint]:
         """Fetch metering points from session endpoint."""
-        response = await self._get(SESSION_URL)
+        response = await self._get(get_session_url(self._locale))
 
         try:
             json_data = response.json()
@@ -145,6 +146,7 @@ class FortumAPIClient:
     ) -> list[TimeSeries]:
         """Internal method to fetch time series data."""
         url = APIEndpoints.get_time_series_url(
+            self._locale,
             metering_point_nos=metering_point_nos,
             from_date=from_date,
             to_date=to_date,
@@ -281,7 +283,7 @@ class FortumAPIClient:
                         "Gecko/20100101 Firefox/138.0"
                     ),
                     "Content-Type": "application/json",
-                    "Referer": "https://www.fortum.com/se/el/inloggad/el",
+                    "Referer": f"{get_fortum_base_url(self._locale)}/inloggad/el",
                 }
 
                 # Only add Authorization header for non-session endpoints
@@ -537,7 +539,7 @@ class FortumAPIClient:
         """Test API connection and return status information."""
         try:
             # Test session endpoint first
-            session_response = await self._get(SESSION_URL)
+            session_response = await self._get(get_session_url(self._locale))
             session_data = session_response.json()
 
             # Check if we have user data

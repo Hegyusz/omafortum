@@ -14,7 +14,7 @@ from .api import FortumAPIClient, OAuth2AuthClient
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
-from .const import DOMAIN, PLATFORMS
+from .const import DOMAIN, PLATFORMS, CONF_LOCALE
 from .coordinator import MittFortumDataCoordinator
 from .device import MittFortumDevice
 from .exceptions import AuthenticationError, MittFortumError
@@ -29,6 +29,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Get credentials from config entry
     username = entry.data[CONF_USERNAME]
     password = entry.data[CONF_PASSWORD]
+    locale = entry.data[CONF_LOCALE]
 
     try:
         # Initialize authentication client
@@ -36,13 +37,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             hass=hass,
             username=username,
             password=password,
+            locale=locale,
         )
 
         # Perform initial authentication
         await auth_client.authenticate()
 
         # Create API client
-        api_client = FortumAPIClient(hass, auth_client)
+        api_client = FortumAPIClient(hass, auth_client, locale)
 
         # Get customer ID for device creation
         customer_id = await api_client.get_customer_id()

@@ -19,7 +19,7 @@ from homeassistant.helpers.httpx_client import get_async_client
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
-from ..const import OAUTH_CLIENT_ID, OAUTH_REDIRECT_URI, OAUTH_SCOPE, OAUTH_SECRET_KEY
+from ..const import OAUTH_CLIENT_ID, OAUTH_SCOPE, OAUTH_SECRET_KEY, get_api_base_url, get_auth_index_value, get_oauth_redirect_uri, get_fortum_base_url
 from ..exceptions import AuthenticationError, OAuth2Error
 from ..models import AuthTokens
 from .endpoints import APIEndpoints
@@ -47,16 +47,18 @@ class OAuth2AuthClient:
         hass: HomeAssistant,
         username: str,
         password: str,
+        locale: str,
         client_id: str = OAUTH_CLIENT_ID,
-        redirect_uri: str = OAUTH_REDIRECT_URI,
+        redirect_uri: str = None,
         secret_key: str = OAUTH_SECRET_KEY,
     ) -> None:
         """Initialize OAuth2 client."""
         self._hass = hass
         self._username = username
         self._password = password
+        self._locale = locale
         self._client_id = client_id
-        self._redirect_uri = redirect_uri
+        self._redirect_uri = redirect_uri or get_oauth_redirect_uri(locale)
         self._secret_key = secret_key
 
         # Token storage
@@ -277,13 +279,13 @@ class OAuth2AuthClient:
         """Initialize Fortum session and get CSRF token."""
         # Get providers
         providers_resp = await client.get(
-            "https://www.fortum.com/se/el/api/auth/providers"
+            f"{get_api_base_url(self._locale)}/auth/providers"
         )
         if providers_resp.status_code != 200:
             raise OAuth2Error(f"Providers fetch failed: {providers_resp.status_code}")
 
         # Get CSRF token
-        csrf_resp = await client.get("https://www.fortum.com/se/el/api/auth/csrf")
+        csrf_resp = await client.get(f"{get_api_base_url(self._locale)}/auth/csrf")
         if csrf_resp.status_code != 200:
             raise OAuth2Error(f"CSRF fetch failed: {csrf_resp.status_code}")
 
@@ -299,12 +301,12 @@ class OAuth2AuthClient:
         """Initiate OAuth signin and get OAuth URL."""
         signin_data = {
             "csrfToken": csrf_token,
-            "callbackUrl": "https://www.fortum.com/se/el/inloggad/oversikt",
+            "callbackUrl": f"{get_fortum_base_url(self._locale)}/inloggad/oversikt",
             "json": "true",
         }
 
         signin_resp = await client.post(
-            "https://www.fortum.com/se/el/api/auth/signin/ciamprod",
+            f"{get_api_base_url(self._locale)}/auth/signin/ciamprod",
             json=signin_data,
             headers={"Content-Type": CONTENT_TYPE_JSON},
         )
@@ -344,9 +346,9 @@ class OAuth2AuthClient:
             )
 
             auth_params = {
-                "locale": "sv",
+                "locale": self._locale.lower(),
                 "authIndexType": "service",
-                "authIndexValue": "SeB2COGWLogin",
+                "authIndexValue": get_auth_index_value(self._locale),
                 "goto": oauth_url,
             }
 
@@ -465,7 +467,7 @@ class OAuth2AuthClient:
 
     async def _verify_session_established(self, client) -> dict[str, Any]:
         """Verify that session is properly established."""
-        session_resp = await client.get("https://www.fortum.com/se/el/api/auth/session")
+        session_resp = await client.get(f"{get_api_base_url(self._locale)}/auth/session")
 
         if session_resp.status_code != 200:
             raise OAuth2Error(
@@ -581,10 +583,10 @@ class OAuth2AuthClient:
             "state": state,
             "code_challenge": code_challenge,
             "code_challenge_method": "S256",
-            "acr_values": "seb2cogwlogin",
-            "locale": "sv",
-            "ui_locales": "sv",
-            "acr": "seb2cogwlogin",
+            "acr_values": get_auth_index_value(self._locale).lower(),
+            "locale": self._locale.lower(),
+            "ui_locales": self._locale.lower(),
+            "acr": get_auth_index_value(self._locale).lower(),
             "response_mode": "query",
         }
         return f"{config['authorization_endpoint']}?{urlencode(params)}"
@@ -608,7 +610,7 @@ class OAuth2AuthClient:
     async def _authenticate_user(self, client) -> dict[str, Any]:
         """Authenticate user with credentials."""
         # Get auth ID
-        response = await client.post(APIEndpoints.AUTH_INIT)
+        response = await client.post(APIEndpoints.get_auth_init_url(self._locale))
         if response.status_code != 200:
             raise OAuth2Error(f"Auth initiation failed: {response.status_code}")
 
@@ -647,7 +649,7 @@ class OAuth2AuthClient:
             ],
         }
 
-        response = await client.post(APIEndpoints.AUTH_INIT, json=login_payload)
+        response = await client.post(APIEndpoints.get_auth_init_url(self._locale), json=login_payload)
         if response.status_code != 200:
             raise OAuth2Error(f"User authentication failed: {response.status_code}")
 
@@ -682,8 +684,8 @@ class OAuth2AuthClient:
             f"response_type=code&scope={'%20'.join(OAUTH_SCOPE)}&"
             f"state={state}&code_challenge={code_challenge}&"
             f"code_challenge_method=S256&response_mode=query&"
-            f"acr_values=seb2cogwlogin&acr=seb2cogwlogin&"
-            f"locale=sv&ui_locales=sv"
+            f"acr_values={get_auth_index_value(self._locale).lower()}&acr={get_auth_index_value(self._locale).lower()}&"
+            f"locale={self._locale.lower()}&ui_locales={self._locale.lower()}"
         )
 
         response = await client.post(
@@ -746,7 +748,7 @@ class OAuth2AuthClient:
         """Validate that the session works against actual API endpoints."""
         try:
             # Test against the session endpoint that the client actually uses
-            test_url = "https://www.fortum.com/se/el/api/auth/session"
+            test_url = f"{get_api_base_url(self._locale)})/auth/session"
             response = await client.get(test_url)
 
             if response.status_code == 200:

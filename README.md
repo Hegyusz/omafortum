@@ -5,7 +5,7 @@ A Home Assistant custom integration for accessing energy consumption data from F
 ## Features
 
 - **Energy Consumption Monitoring**: Track your energy usage over time
-- **Cost Tracking**: Monitor energy costs in SEK
+- **Cost Tracking**: Monitor energy costs in SEK or EUR
 - **Secure OAuth2 Authentication**: Uses Fortum's official authentication system
 - **Automatic Token Refresh**: Handles token expiration automatically
 - **Device Integration**: Creates a device in Home Assistant for easy management
@@ -44,7 +44,7 @@ A Home Assistant custom integration for accessing energy consumption data from F
 The integration creates the following entities:
 
 - **Energy Consumption Sensor**: Total energy consumption in kWh
-- **Total Cost Sensor**: Total energy cost in SEK
+- **Total Cost Sensor**: Total energy cost in SEK or EUR
 
 ## Architecture
 
